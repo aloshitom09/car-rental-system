@@ -20,6 +20,8 @@ public class CarRentalView extends JFrame {
     private JTable transactionsTable;
     private JTable adminCarTable;
 
+
+
     public CarRentalView(CarRentalController controller) {
         this.controller = controller;
         setTitle("Car Rental System");
@@ -34,8 +36,15 @@ public class CarRentalView extends JFrame {
         mainPanel.add(createUserLoginPanel(), "UserLogin");
         mainPanel.add(createAdminLoginPanel(), "CompanyLogin");
         mainPanel.add(createRegisterPanel(), "UserRegister");
+        mainPanel.add(createCompanyRegisterPanel(), "CompanyRegister");
         mainPanel.add(createUserDashboardPanel(), "UserDashboard");
         mainPanel.add(createCompanyDashboardPanel(), "CompanyDashboard");
+        mainPanel.add(createAddCarPanel(), "AddCar");
+        mainPanel.add(createEditSingleFieldPanel(), "EditSingleField");
+
+
+
+
 
         add(mainPanel);
         showView("RoleSelection");
@@ -127,9 +136,57 @@ public class CarRentalView extends JFrame {
         panel.add(loginBtn);
         panel.add(backBtn);
 
+        // 🔧 INSERT THIS HERE
+        JButton registerBtn = new JButton("New Company? Register");
+        registerBtn.addActionListener(e -> showView("CompanyRegister"));
+        panel.add(registerBtn);
+
         ThemeManager.applyLoginTheme(panel);
         return panel;
     }
+
+    
+    private JPanel createCompanyRegisterPanel() {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(50, 100, 50, 100));
+
+        JTextField companyNameField = new JTextField();
+        JTextField emailField = new JTextField();
+        JTextField phoneField = new JTextField();
+        JPasswordField passwordField = new JPasswordField();
+
+        panel.add(new JLabel("Company Name:"));
+        panel.add(companyNameField);
+        panel.add(new JLabel("Email:"));
+        panel.add(emailField);
+        panel.add(new JLabel("Phone:"));
+        panel.add(phoneField);
+        panel.add(new JLabel("Password:"));
+        panel.add(passwordField);
+
+        JButton registerBtn = new JButton("Register");
+        JButton backBtn = new JButton("← Back");
+
+        registerBtn.addActionListener(e -> {
+            String companyName = companyNameField.getText().trim();
+            String email = emailField.getText().trim();
+            String phone = phoneField.getText().trim();
+            String password = new String(passwordField.getPassword()).trim();
+
+            boolean success = controller.registerCompany(companyName, email, phone, password);
+            JOptionPane.showMessageDialog(this, success ? "Company registered successfully!" : "Registration failed.");
+            if (success) showView("CompanyLogin");
+        });
+
+        backBtn.addActionListener(e -> showView("CompanyLogin"));
+
+        panel.add(registerBtn);
+        panel.add(backBtn);
+
+        ThemeManager.applyFormTheme(panel);
+        return panel;
+    }
+
 
     private JPanel createRegisterPanel() {
         JPanel panel = new JPanel(new GridLayout(0, 1, 10, 10));
@@ -219,7 +276,7 @@ public class CarRentalView extends JFrame {
         confirmBookingBtn.addActionListener(e -> {
             int selectedRow = availableCarsTable.getSelectedRow();
             if (selectedRow == -1) {
-                JOptionPane.showMessageDialog(this, "Please select a car to book.");
+                JOptionPane.showMessageDialog(panel, "Please select a car to book.");
                 return;
             }
 
@@ -227,8 +284,19 @@ public class CarRentalView extends JFrame {
             String name = nameField.getText().trim();
             String phone = phoneField.getText().trim();
             String address = addressField.getText().trim();
+
+            if (name.isEmpty() || phone.isEmpty() || address.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "Please fill in all booking details.");
+                return;
+            }
+
             LocalDate startDate = ((Date) startDateSpinner.getValue()).toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
             LocalDate endDate = ((Date) endDateSpinner.getValue()).toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+
+            if (endDate.isBefore(startDate)) {
+                JOptionPane.showMessageDialog(panel, "End date cannot be before start date.");
+                return;
+            }
 
             controller.bookCarWithDetails(carId, name, phone, address, startDate, endDate);
 
@@ -255,6 +323,7 @@ public class CarRentalView extends JFrame {
         return panel;
     }
 
+
     private JPanel createCompanyDashboardPanel() {
         JPanel panel = new JPanel(new BorderLayout());
 
@@ -267,6 +336,30 @@ public class CarRentalView extends JFrame {
         JLabel statusLabel = new JLabel("Set Availability:");
         JComboBox<String> statusDropdown = new JComboBox<>(new String[]{"Available", "Booked", "Maintenance"});
         JButton updateButton = new JButton("Update");
+        JButton addCarButton = new JButton("Add New Car");
+        addCarButton.addActionListener(e -> showView("AddCar")); // This assumes you’ve registered "AddCar" view
+        controlPanel.add(addCarButton);
+        JButton editFieldBtn = new JButton("Edit Field");
+        editFieldBtn.addActionListener(e -> showView("EditSingleField"));
+        controlPanel.add(editFieldBtn);
+
+        JButton deleteButton = new JButton("Delete Car");
+        deleteButton.addActionListener(e -> {
+            int selectedRow = adminCarTable.getSelectedRow();
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(this, "Please select a car to delete.");
+                return;
+            }
+
+            int carId = (int) adminCarTable.getValueAt(selectedRow, 0); // Assuming car_id is column 0
+            int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete this car?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                boolean success = controller.deleteCarById(carId);
+                JOptionPane.showMessageDialog(this, success ? "Car deleted successfully." : "Failed to delete car.");
+                if (success) controller.refreshAdminDashboardData(adminCarTable);
+            }
+        });
+        controlPanel.add(deleteButton);
 
         updateButton.addActionListener(e -> {
             int selectedRow = adminCarTable.getSelectedRow();
@@ -295,6 +388,113 @@ public class CarRentalView extends JFrame {
         ThemeManager.applyDashboardTheme(panel);
         return panel;
     }
+    
+    private JPanel createEditSingleFieldPanel() {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(50, 100, 50, 100));
+
+        JComboBox<String> fieldDropdown = new JComboBox<>(new String[]{
+            "Model Name", "Car Type", "Registration No", "Seat Capacity", "Rent Per Day"
+        });
+
+        JTextField newValueField = new JTextField();
+        JButton updateBtn = new JButton("Update Field");
+        JButton backBtn = new JButton("← Back");
+
+        panel.add(new JLabel("Select Field to Edit:"));
+        panel.add(fieldDropdown);
+        panel.add(new JLabel("New Value:"));
+        panel.add(newValueField);
+        panel.add(updateBtn);
+        panel.add(backBtn);
+
+        updateBtn.addActionListener(e -> {
+            int selectedRow = adminCarTable.getSelectedRow();
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(this, "Please select a car from the table.");
+                return;
+            }
+
+            int carId = (int) adminCarTable.getValueAt(selectedRow, 0);
+            String fieldLabel = (String) fieldDropdown.getSelectedItem();
+            String newValue = newValueField.getText().trim();
+
+            // Map label to actual DB column
+            String fieldName = switch (fieldLabel) {
+                case "Model Name" -> "model_name";
+                case "Car Type" -> "car_type";
+                case "Registration No" -> "registration_no";
+                case "Seat Capacity" -> "seat_capacity";
+                case "Rent Per Day" -> "rent_per_day";
+                default -> "";
+            };
+
+            boolean success = controller.updateCarField(carId, fieldName, newValue);
+            JOptionPane.showMessageDialog(this, success ? "Field updated successfully." : "Failed to update field.");
+            if (success) {
+                controller.refreshAdminDashboardData(adminCarTable);
+                showView("CompanyDashboard");
+            }
+        });
+
+        backBtn.addActionListener(e -> showView("CompanyDashboard"));
+        ThemeManager.applyFormTheme(panel);
+        return panel;
+    }
+
+
+    
+    private JPanel createAddCarPanel() {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(50, 100, 50, 100));
+
+        JTextField modelField = new JTextField();
+        JTextField typeField = new JTextField();
+        JTextField regField = new JTextField();
+        JTextField seatField = new JTextField();
+        JTextField rentField = new JTextField();
+
+        panel.add(new JLabel("Model Name:"));
+        panel.add(modelField);
+        panel.add(new JLabel("Car Type:"));
+        panel.add(typeField);
+        panel.add(new JLabel("Registration No:"));
+        panel.add(regField);
+        panel.add(new JLabel("Seat Capacity:"));
+        panel.add(seatField);
+        panel.add(new JLabel("Rent Per Day:"));
+        panel.add(rentField);
+
+        JButton addBtn = new JButton("Add Car");
+        JButton backBtn = new JButton("← Back");
+
+        addBtn.addActionListener(e -> {
+            try {
+                String model = modelField.getText().trim();
+                String type = typeField.getText().trim();
+                String regNo = regField.getText().trim();
+                int seats = Integer.parseInt(seatField.getText().trim());
+                double rent = Double.parseDouble(rentField.getText().trim());
+
+                boolean success = controller.addNewCar(model, type, regNo, seats, rent);
+                JOptionPane.showMessageDialog(this, success ? "Car added successfully!" : "Failed to add car.");
+                if (success) controller.refreshAdminDashboardData(adminCarTable); // if you have a table reference
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid input: " + ex.getMessage());
+            }
+        });
+
+        backBtn.addActionListener(e -> showView("CompanyDashboard"));
+
+        panel.add(addBtn);
+        panel.add(backBtn);
+
+        ThemeManager.applyFormTheme(panel);
+        return panel;
+    }
+    
+    
+
 
     public void showView(String viewName) {
         cardLayout.show(mainPanel, viewName);
